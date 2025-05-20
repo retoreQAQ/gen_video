@@ -78,11 +78,3 @@ def generate_images(scene_data, image_dir, img_client):
             logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
             continue
 
-if __name__ == "__main__":
-    # 示例用法
-    prompt = "上海美术制片厂风格，竖屏9:16。懒狐狸（棕红色毛发，蓬松尾巴，狡猾眼神）站在獾（灰色毛发，圆胖身材，严肃表情）的洞口前，懒狐狸伸出一只爪子指向洞内。背景为森林边缘，洞口周围有灌木丛和野花。场景时间为傍晚，光线柔和，整体色调为暖棕色，细节如獾的爪子和懒狐狸的尾巴突出。儿童插图，国风，水墨线条，细节丰富。"
-    img_client = OpenAI(api_key="REMOVED")
-    save_path = "./resources/gpt-image-1_low.png"
-    generate_image(prompt, save_path, img_client)
-    print(f"图片已保存到: {save_path}")
-
