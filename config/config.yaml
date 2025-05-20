@@ -1,0 +1,26 @@
+# 基础配置
+base:
+  # 资源文件存放目录
+  resources_dir: "./resources"
+  # 临时文件目录
+  temp_dir: "./temp"
+  # 故事名称
+  story_name: "default"
+  # 手动分段
+  manual_clip_story: false
+
+# 文件配置
+files:
+  # 音频文件名
+  audio:
+    m4a: "新录音.m4a"
+    mp3: "audio.mp3"
+  # 文本文件名
+  text:
+    story: "story.txt"
+    prompts: "scene_prompts.json"
+    subtitles: "subtitles.json"
+  # 图片和视频目录
+  media:
+    image_dir: "images"
+    output_video: "output_video.mp4"
