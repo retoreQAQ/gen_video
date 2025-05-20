@@ -6,14 +6,11 @@ import base64
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def generate_image(prompt, save_path, img_client, model="gpt-image-1"):
+def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
     """
     https://platform.openai.com/docs/api-reference/images/createVariation
     使用OpenAI的DALL·E 3 API根据提示词生成图片并保存到本地。
-    :param prompt: 文生图提示词
-    :param api_key: OpenAI API Key
-    :param save_path: 图片保存路径
-    :return: 图片保存路径
+    
     """
     if model == "gpt-image-1":
         result = img_client.images.generate(
@@ -72,7 +69,7 @@ def generate_images(scene_data, image_dir, img_client):
         logging.info(f"正在生成场景 {scene_num} 的图片...")
         try:
             save_path = os.path.join(image_dir, f"scene_{i:02d}.png")
-            generate_image(prompt, save_path, img_client)
+            generate_image_by_api(prompt, save_path, img_client)
             logging.info(f"场景 {scene_num} 图片生成成功")
         except Exception as e:
             logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")

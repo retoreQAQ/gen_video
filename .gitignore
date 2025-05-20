@@ -51,3 +51,4 @@ config/key.zshrc
 .cursor
 resources/*
 temp/*
+chatapi.ipynb
