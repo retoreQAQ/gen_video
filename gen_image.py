@@ -77,4 +77,3 @@ def generate_images(scene_data, image_dir, img_client):
         except Exception as e:
             logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
             continue
-
