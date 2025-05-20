@@ -1,9 +1,52 @@
+import os
+import shutil
 import json
 import re
 from sentence_transformers import SentenceTransformer, util
 import torch
-
+import subprocess
+import logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from difflib import SequenceMatcher
+
+def convert_audio_to_mp3(input_path, output_path):
+    if not input_path.endswith(".mp3"):
+        # 使用 ffmpeg 进行音频格式转换
+        cmd = ["ffmpeg", "-y", "-i", input_path, output_path]
+        subprocess.run(cmd, check=True)
+        logging.info(f"音频已转换为 mp3 格式: {output_path}")
+
+def move_upload_files(temp_dir, target_dir):
+    os.makedirs(temp_dir, exist_ok=True)
+    os.makedirs(target_dir, exist_ok=True)
+    # 检查story.txt和m4a文件是否已存在
+    story_exists = False
+    m4a_exists = False
+    for fname in os.listdir(target_dir):
+        if fname == "story.txt":
+            story_exists = True
+        elif fname.endswith(".m4a"):
+            m4a_exists = True
+    
+    if story_exists and m4a_exists:
+        logging.info("story.txt和m4a文件已存在，跳过移动操作")
+        return
+    for fname in os.listdir(temp_dir):
+        src = os.path.join(temp_dir, fname)
+        tgt = os.path.join(target_dir, fname)
+        shutil.move(src, tgt)
+        if src.endswith(".txt"):
+            # 如果是文本文件，创建一个空的同名文件
+            with open(src, 'w', encoding='utf-8') as f:
+                pass
+    logging.info(f"已将 {temp_dir} 下所有文件移动到 {target_dir}")
+
+def move_files(source_dir, target_dir):
+    os.makedirs(target_dir, exist_ok=True)
+    for fname in os.listdir(source_dir):
+        src = os.path.join(source_dir, fname)
+        tgt = os.path.join(target_dir, fname)
+        shutil.move(src, tgt)
 
 def align_by_substring_matching(segments, full_script_text):
     result = []

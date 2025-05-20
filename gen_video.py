@@ -1,109 +1,137 @@
 import os
-import whisper
-from moviepy.editor import VideoFileClip, AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips, ColorClip, TextClip
-from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import StableDiffusionPipeline
-import torch
-import json
+from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips
 import logging
 from difflib import SequenceMatcher
 from PIL import Image, ImageDraw, ImageFont # type: ignore
 import numpy as np
 from moviepy.editor import ImageClip
-from utils.tools import safe_extract_json
-import time
+import json
+import subtitle
 
-# 配置日志
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def align_segments_with_script_batched(client, segments, script_file, batch_size = 8):
+def generate_video(config, scene_datas):
     """
-    Whisper语音识别片段与剧本逐段匹配（batched处理，节省token）
-
-    Args:
-        segments: Whisper识别的语音片段列表
-        script_file: 完整剧本路径
-        batch_size: 每次发送给 LLM 的片段数量
-
-    Returns:
-        List[dict]: 对齐后的字幕数据
-    """
-    with open(script_file, "r", encoding="utf-8") as f:
-        script = f.read().replace("\n", "").replace(" ", "")  # 清理格式
-
-    system_prompt = """
-你是一个字幕智能助手。任务是：
-1. 接收一段剧本文本 + 若干语音识别句子（含时间戳）。
-2. 将每个识别句子的 text 替换为在剧本文本中最接近的一句。
-3. 保留时间戳字段 start / end / duration，不得改动。
-4. 返回结构与输入一致的 JSON 列表，仅替换 text 字段。
-    """
-
-    aligned_results = []
-
-    for i in range(0, len(segments), batch_size):
-        batch = segments[i:i + batch_size]
-        formatted_batch = [
-            {
-                "text": seg["text"],
-                "start": round(seg["start"], 2),
-                "end": round(seg["end"], 2),
-                "duration": round(seg["end"] - seg["start"], 2)
-            } for seg in batch
-        ]
-
-        user_prompt = f"""剧本文本：
-{script}
-
-识别句子列表：
-{json.dumps(formatted_batch, ensure_ascii=False, indent=2)}
-"""
-
-        try:
-            response = client.chat.completions.create(
-                model="deepseek-chat",
-                messages=[
-                    {"role": "system", "content": system_prompt.strip()},
-                    {"role": "user", "content": user_prompt.strip()}
-                ],
-                temperature=0.2,
-            )
-            result = response.choices[0].message.content
-            if result is None:
-                raise ValueError("LLM 返回的内容为空")
-            batch_result = safe_extract_json(result)
-            aligned_results.extend(batch_result)
-            time.sleep(1.2)  # 防止触发速率限制
-        except Exception as e:
-            print(f"⚠️ 批次处理失败（第 {i//batch_size+1} 批）: {e}")
-            continue
-
-    return aligned_results
-
-def extract_subtitles(client, audio_path, script_path, output_path):
-    """
-    提取字幕并进行对齐
+    根据字幕和场景数据生成视频
     
     Args:
         audio_path: 音频文件路径
-        script_path: 脚本文件路径
+        subtitles: 字幕片段
+        scene_data: 场景数据
+        image_dir: 图片目录
+        output_video: 输出视频路径
     """
-    if os.path.exists(output_path):
-        with open(output_path, "r", encoding="utf-8") as f:
-            aligned_segments = json.load(f)
-        logging.info(f"已从 {output_path} 读取 {len(aligned_segments)} 条字幕")
-        return aligned_segments
-    logging.info("开始语音识别...")
-    model = whisper.load_model("base")
-    result = model.transcribe(audio_path, temperature=0.6, language="zh")
-    segments = result["segments"]
-    logging.info(f"语音识别完成，共识别出 {len(segments)} 个片段")
-    # 可选：对齐字幕
+    logging.info("开始合成视频...")
+    audio_path = os.path.join(config["base"]["base_dir"], config["files"]["audio"]["mp3"])
+    split_story_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["split_story"])
+    subtitles_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["subtitles"])
+    image_dir = os.path.join(config["base"]["base_dir"], config["files"]["media"]["image_dir"])
+    output_video = os.path.join(config["base"]["base_dir"], config["files"]["media"]["output_video"])
 
-    aligned_segments = align_segments_with_script_batched(client, segments, script_path, batch_size=32)
-    with open(output_path, "w", encoding="utf-8") as f:
-        json.dump(aligned_segments, f, ensure_ascii=False, indent=2)
-    logging.info(f"字幕提取并对齐完成，输出到 {output_path}")
-    return aligned_segments
+    with open(subtitles_path, "r", encoding="utf-8") as f:
+        subtitles = json.load(f)
+    with open(split_story_path, "r", encoding="utf-8") as f:
+        split_story = json.load(f)
+
+    clips = []
+    audio_clip = AudioFileClip(audio_path)
+    current_scene = None
+    scene_duration = 0
+    min_scene_duration = 3  # 最小场景持续时间（秒）
+
+    for i, subtitle in enumerate(subtitles):
+        try:
+            start = float(subtitle["start"])
+            end = float(subtitle["end"])
+            duration = end - start
+            text = subtitle["text"]
+            
+            # 根据文本内容找到最匹配的场景
+            matching_scene = find_best_matching_scene(text, scene_datas)
+            
+            # 如果找到匹配的场景且当前场景持续时间足够长，则切换场景
+            if matching_scene is not None and (current_scene is None or scene_duration >= min_scene_duration):
+                current_scene = matching_scene
+                scene_duration = 0
+            
+            # 如果没有找到匹配的场景，使用当前场景或默认场景
+            if current_scene is None:
+                current_scene = 0
+            
+            scene_duration += duration
+            img_path = f"{image_dir}/scene_{current_scene:02d}.png"
+            
+            # 检查图片文件是否存在
+            if not os.path.exists(img_path):
+                logging.error(f"图片文件不存在: {img_path}")
+                continue
+
+            # 创建图片剪辑
+            img_clip = ImageClip(img_path).set_duration(duration).resize(height=720)
+            
+            # 创建字幕剪辑
+            subtitle_clip = create_subtitle_clip(text, duration, img_clip.size)
+            
+            # 合成视频片段
+            clip = CompositeVideoClip([img_clip, subtitle_clip])
+            clips.append(clip)
+            logging.info(f"已处理第 {i+1} 个片段，使用场景 {current_scene}")
+        except Exception as e:
+            logging.error(f"处理第 {i+1} 个片段时出错: {str(e)}")
+            continue
+
+    # 检查是否有可用的片段
+    if not clips:
+        logging.error("没有可用的视频片段，无法生成视频")
+        raise ValueError("没有可用的视频片段")
+
+    logging.info("正在生成最终视频...")
+    final_video = concatenate_videoclips(clips).set_audio(audio_clip)
+    final_video.write_videofile(output_video, fps=24)
+    logging.info("视频生成完成！")
+
+def get_img_duration(split_story, subtitles):
+    """
+    根据原文和字幕数据计算每个场景的时长
+    
+    Args:
+        split_story: 分段后的原文列表
+        subtitles: 带时间戳的字幕数据列表
+    
+    Returns:
+        scene_durations: 每个场景的开始时间、结束时间和持续时间
+    """
+    scene_durations = []
+    subtitle_idx = 0
+    
+    for story_text in split_story["scenes"]:
+        start_time = None
+        end_time = None
+        
+        # 遍历字幕找到匹配的片段
+        while subtitle_idx < len(subtitles):
+            subtitle = subtitles[subtitle_idx]
+            subtitle_text = subtitle["text"]
+            
+            # 如果字幕文本在当前故事片段中
+            if subtitle_text in story_text:
+                if start_time is None:
+                    start_time = subtitle["start"]
+                end_time = subtitle["end"]
+                subtitle_idx += 1
+            else:
+                # 如果已经找到了开始时间但字幕不匹配,说明当前片段结束
+                if start_time is not None:
+                    break
+                subtitle_idx += 1
+                
+        if start_time is not None and end_time is not None:
+            duration = end_time - start_time
+            scene_durations.append({
+                "start": start_time,
+                "end": end_time,
+                "duration": duration
+            })
+            
+    return scene_durations
 
 # 添加场景匹配函数
 def find_best_matching_scene(text, scenes):
@@ -165,72 +193,3 @@ def create_subtitle_clip(text, duration, img_size):
     subtitle_clip = subtitle_clip.crossfadein(0.3).crossfadeout(0.3)
 
     return subtitle_clip
-
-
-def generate_video(audio_path, segments, scene_data, image_dir):
-    """
-    根据字幕和场景数据生成视频
-    
-    Args:
-        audio_path: 音频文件路径
-        segments: 字幕片段
-        scene_data: 场景数据
-        image_dir: 图片目录
-    """
-    logging.info("开始合成视频...")
-    clips = []
-    audio_clip = AudioFileClip(audio_path)
-    current_scene = None
-    scene_duration = 0
-    min_scene_duration = 3  # 最小场景持续时间（秒）
-
-    for i, seg in enumerate(segments):
-        try:
-            start = float(seg["start"])
-            end = float(seg["end"])
-            duration = end - start
-            text = seg["text"]
-            
-            # 根据文本内容找到最匹配的场景
-            matching_scene = find_best_matching_scene(text, scene_data)
-            
-            # 如果找到匹配的场景且当前场景持续时间足够长，则切换场景
-            if matching_scene is not None and (current_scene is None or scene_duration >= min_scene_duration):
-                current_scene = matching_scene
-                scene_duration = 0
-            
-            # 如果没有找到匹配的场景，使用当前场景或默认场景
-            if current_scene is None:
-                current_scene = 0
-            
-            scene_duration += duration
-            img_path = f"{image_dir}/scene_{current_scene:02d}.png"
-            
-            # 检查图片文件是否存在
-            if not os.path.exists(img_path):
-                logging.error(f"图片文件不存在: {img_path}")
-                continue
-
-            # 创建图片剪辑
-            img_clip = ImageClip(img_path).set_duration(duration).resize(height=720)
-            
-            # 创建字幕剪辑
-            subtitle_clip = create_subtitle_clip(text, duration, img_clip.size)
-            
-            # 合成视频片段
-            clip = CompositeVideoClip([img_clip, subtitle_clip])
-            clips.append(clip)
-            logging.info(f"已处理第 {i+1} 个片段，使用场景 {current_scene}")
-        except Exception as e:
-            logging.error(f"处理第 {i+1} 个片段时出错: {str(e)}")
-            continue
-
-    # 检查是否有可用的片段
-    if not clips:
-        logging.error("没有可用的视频片段，无法生成视频")
-        raise ValueError("没有可用的视频片段")
-
-    logging.info("正在生成最终视频...")
-    final_video = concatenate_videoclips(clips).set_audio(audio_clip)
-    final_video.write_videofile("output_video.mp4", fps=24)
-    logging.info("视频生成完成！")

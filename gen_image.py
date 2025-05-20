@@ -1,10 +1,32 @@
 import os
-import requests
 import logging
-from openai import OpenAI
 import base64
+from openai import OpenAI
+import torch
+from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import StableDiffusionPipeline
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def generate_images(config, scene_datas):
+    use_api = config["model"]["img"]["use_api"]
+    img_dir = os.path.join(config["base"]["base_dir"], config["files"]["media"]["image_dir"])
+    logging.info("开始生成场景图片...")
+    os.makedirs(img_dir, exist_ok=True)
+    for i, (scene_num, desc, scene, prompt) in enumerate(scene_datas):
+        logging.info(f"正在生成场景 {scene_num} 的图片...")
+        try:
+            save_path = os.path.join(img_dir, f"scene_{i:02d}.png")
+            if use_api:
+                img_model = config["model"]["img"]["api"]
+                img_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                generate_image_by_api(prompt, save_path, img_client, img_model)
+            else:
+                img_model = config["model"]["img"]["offline"]
+                generate_image_by_offline(prompt, save_path, img_model)
+            logging.info(f"场景 {scene_num} 图片生成成功")
+        except Exception as e:
+            logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
+            continue
 
 def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
     """
@@ -40,37 +62,18 @@ def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
     # Save the image to a file
     with open(save_path, "wb") as f:
         f.write(image_bytes)
-    # image_url = result.data[0].url
-    # img_data = requests.get(image_url).content
-    # headers = {
-    #     "Authorization": f"Bearer {img_client.api_key}",
-    #     "Content-Type": "application/json"
-    # }
-    # data = {
-    #     "model": "dall-e-2",
-    #     "prompt": prompt,
-    #     "n": 1,
-    #     "size": "1024x1792"  # 竖屏9:16，DALL·E 3支持的最大竖屏尺寸
-    # }
-    # response = requests.post(url, headers=headers, json=data)
-    # response.raise_for_status()
-    # image_url = response.json()["data"][0]["url"]
 
-    # # 下载图片
-    # img_data = requests.get(image_url).content
-    # with open(save_path, "wb") as f:
-    #     f.write(img_data)
-    return save_path
+def generate_image_by_offline(prompt, save_path, model):
+    if model == "taiyi-sd":
+        pipe = StableDiffusionPipeline.from_pretrained(
+            "IDEA-CCNL/Taiyi-Stable-Diffusion-1B-Chinese-v0.1",
+            torch_dtype=torch.float16
+        ).to("cuda")
+    else:
+        raise ValueError(f"不支持的模型: {model}")
+    prompt = prompt[:220]
+    image = pipe(prompt).images[0]
+    image.save(os.path.join(save_path))
 
-def generate_images(scene_data, image_dir, img_client):
-    logging.info("开始生成场景图片...")
-    os.makedirs(image_dir, exist_ok=True)
-    for i, (scene_num, desc, scene, prompt) in enumerate(scene_data):
-        logging.info(f"正在生成场景 {scene_num} 的图片...")
-        try:
-            save_path = os.path.join(image_dir, f"scene_{i:02d}.png")
-            generate_image_by_api(prompt, save_path, img_client)
-            logging.info(f"场景 {scene_num} 图片生成成功")
-        except Exception as e:
-            logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
-            continue
+if __name__ == "__main__":
+    generate_image_by_offline("一个美丽的女孩在海边散步", "test.png", "taiyi-sd")

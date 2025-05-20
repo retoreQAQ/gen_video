@@ -49,6 +49,7 @@ Thumbs.db
 
 config/key.zshrc
 .cursor
-resources/*
+output/*
 temp/*
 chatapi.ipynb
+upload/*
