@@ -53,22 +53,12 @@ pip install -r requirements.txt
 
 ## 使用方法
 
-1. 准备音频文件和剧本
-2. 运行提示词生成：
+1. 准备音频文件和剧本，放在upload文件夹。
+2. 运行：
    ```bash
-   python gen_prompt.py
+   python main.py story_name
    ```
-3. 生成视频：
-   ```bash
-   python gen_video.py
-   ```
-
-## 配置说明
-
-- 音频文件路径：`resources/wav/all.mp3`
-- 剧本文件路径：`resources/lab/all.lab`
-- 场景提示词：`resources/scene_prompts.json`
-- 输出图片目录：`resources/images/`
+3. 生成的视频与中间文件存放在output/story_name下
 
 ## 注意事项
 
