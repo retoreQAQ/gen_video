@@ -20,7 +20,9 @@ files:
   text:
     story: "story.txt"
     split_story: "split_story.json"
+    raw_scene_prompts: "raw_scene_prompts.json"
     scene_prompts: "scene_prompts.json"
+    asr_result: "asr_result.json"
     subtitles: "subtitles.json"
   # 图片和视频目录
   media:
@@ -28,8 +30,14 @@ files:
     output_video: "output_video.mp4"
 
 model:
-  llm: "deepseek" # 可选值: "deepseek"
-  img: 
+  asr:
+    model: "whisper" # 可选值: "whisper"
+    whisper: "large" # 可选值: "tiny", "base", "small", "medium", "large", "turbo"
+  llm:
+    model: "deepseek" # 可选值: "deepseek"
+    align_batch_size: 32
+    generate_batch_size: 12
+  img:
     use_api: false
     api: "gpt-image-1" # 可选值: "gpt-image-1", "dall-e-3", "dall-e-2"
     offline: "taiyi-sd" # 可选值: "taiyi-sd"

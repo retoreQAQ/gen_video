@@ -14,9 +14,13 @@ def process_story_and_generate_prompts(config, client):
         story_path: 故事文本文件路径
         output_path: 输出JSON文件路径
     """
+    raw_output_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["raw_scene_prompts"])
     output_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["scene_prompts"])
     story_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["story"])
     split_story_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["split_story"])
+
+    generate_batch_size = config["model"]["llm"]["generate_batch_size"]
+
     # 如果输出文件已存在，直接返回
     if os.path.exists(output_path):
         logging.info(f"提示词文件 {output_path} 已存在，跳过生成步骤")
@@ -29,18 +33,19 @@ def process_story_and_generate_prompts(config, client):
     split_story = split_raw_story(client, story, split_story_path)
 
     # 生成提示词
-    result = generate_scene_prompts(config, client, split_story)
-
-    # 清理文本
-    clean_prompts(result, output_path)
+    result = generate_scene_prompts(client, split_story, output_path, generate_batch_size)
 
     # 解析提示词
-    scene_datas = parse_prompts(output_path)
+    scene_datas = parse_prompts(result)
 
     return scene_datas
 
 
 def split_raw_story(client, story_text, split_story_path) -> str:
+    if os.path.exists(split_story_path):
+        with open(split_story_path, "r", encoding="utf-8") as f:
+            result = f.read()
+        return result
     prompt = get_prompt("split_raw_story")
     response = client.chat.completions.create(
         model="deepseek-chat",
@@ -74,53 +79,51 @@ def split_raw_story(client, story_text, split_story_path) -> str:
         f.write(result)
     return result
 
-def generate_scene_prompts(config, client, split_story) -> str:
-    if config["base"]["manual_clip_story"]:
-        pass
-    else:
-        prompt = get_prompt("generate_scene_prompts")
-    response = client.chat.completions.create(
-        model="deepseek-chat",
-        messages=[
-            {"role": "system", "content": prompt},
-            {"role": "user", "content": split_story}
-        ],
-        temperature=0.7,
-        stream=False,
-    )
-    result = response.choices[0].message.content
-    if result is None:
-        raise ValueError("LLM 返回的内容为空")
-    return result
+def generate_scene_prompts(client, split_story, output_path, batch_size) -> str:
+    prompt = get_prompt("generate_scene_prompts")
 
-def clean_prompts(result, output_path):
-    # 清理文本
-    result = result.strip()
-    if result.startswith("```json"):
-        result = result[7:]
-    if result.endswith("```"):
-        result = result[:-3]
-    result = result.strip()
-    
-    # 验证JSON
-    try:
-        json.loads(result)
-    except json.JSONDecodeError as e:
-        logging.error(f"生成的内容不是有效的JSON格式: {str(e)}")
-        logging.error(f"原始文本: {result[:200]}...")  # 打印前200个字符用于调试
-        raise
+    # 将故事分成多个批次处理
+    story_data = json.loads(split_story)
+    scenes = story_data["scenes"]
+    results = []
+
+    for i in range(0, len(scenes), batch_size):
+        batch = scenes[i:i + batch_size]
+        batch_story = json.dumps({"scenes": batch}, ensure_ascii=False, indent=2)
+
+        response = client.chat.completions.create(
+            model="deepseek-chat",
+            messages=[
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": batch_story}
+            ],
+            temperature=0.7,
+            stream=False,
+        )
         
-    # 保存结果
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(result)
-    print("✅ LLM 已生成提示词，保存为 scene_prompts.json")
+        batch_result = response.choices[0].message.content
+        if batch_result is None:
+            raise ValueError(f"第 {i//batch_size + 1} 批次 LLM 返回的内容为空")
+            
+        # 清理并解析批次结果
+        batch_result = batch_result.strip()
+            
+        try:
+            batch_data = json.loads(batch_result)
+            results.extend(batch_data["scenes"])
+        except json.JSONDecodeError as e:
+            raise ValueError(f"第 {i//batch_size + 1} 批次返回的不是有效的JSON格式: {str(e)}")
 
-def parse_prompts(path):
+    # 合并所有批次的结果
+    final_result = json.dumps({"scenes": results}, ensure_ascii=False, indent=2)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(final_result)
+    logging.info(f"成功生成 {len(final_result)} 个场景提示词,保存为 scene_prompts.json")
+    return final_result
+
+def parse_prompts(data):
     logging.info("开始解析提示词文件...")
     try:
-        with open(path, "r", encoding="utf-8") as f:
-            raw = f.read()
-        data = json.loads(raw)
         scenes = data.get("scenes", [])
         if not scenes:
             raise ValueError("未找到任何场景数据")
@@ -131,3 +134,5 @@ def parse_prompts(path):
     except Exception as e:
         logging.error(f"解析提示词文件时出错: {str(e)}")
         raise
+
+    
