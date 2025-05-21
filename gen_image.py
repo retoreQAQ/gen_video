@@ -1,21 +1,29 @@
+import json
 import os
 import logging
 import base64
 from openai import OpenAI
 import torch
 from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion import StableDiffusionPipeline
+from transformers import logging as hf_logging
 
+hf_logging.set_verbosity_error()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def generate_images(config, scene_datas):
+def generate_images(config):
     use_api = config["model"]["img"]["use_api"]
     img_dir = os.path.join(config["base"]["base_dir"], config["files"]["media"]["image_dir"])
+    scene_prompts_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["scene_prompts"])
     logging.info("开始生成场景图片...")
     os.makedirs(img_dir, exist_ok=True)
-    for i, (scene_num, desc, scene, prompt) in enumerate(scene_datas):
+    
+    scenes = json.loads(open(scene_prompts_path, "r", encoding="utf-8").read())
+    for i, scene in enumerate(scenes):
+        scene_num = scene["scene_number"]
+        prompt = scene["prompt"]
         logging.info(f"正在生成场景 {scene_num} 的图片...")
         try:
-            save_path = os.path.join(img_dir, f"scene_{i:02d}.png")
+            save_path = os.path.join(img_dir, f"scene_{scene_num:02d}.png")
             if use_api:
                 img_model = config["model"]["img"]["api"]
                 img_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -67,7 +75,9 @@ def generate_image_by_offline(prompt, save_path, model):
     if model == "taiyi-sd":
         pipe = StableDiffusionPipeline.from_pretrained(
             "IDEA-CCNL/Taiyi-Stable-Diffusion-1B-Chinese-v0.1",
-            torch_dtype=torch.float16
+            torch_dtype=torch.float16,
+            safety_checker=None,
+            requires_safety_checker=False
         ).to("cuda")
     else:
         raise ValueError(f"不支持的模型: {model}")

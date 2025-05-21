@@ -44,13 +44,13 @@ def main():
     extract_subtitles(config, llm_client)
 
     # 3. 生成提示词
-    scene_datas = process_story_and_generate_prompts(config, llm_client)
+    process_story_and_generate_prompts(config, llm_client)
 
     # 5. 文生图
-    generate_images(config, scene_datas)
+    generate_images(config)
 
     # 6. 合成视频（调用 gen_video.py，传递参数）
-    generate_video(config, scene_datas)
+    generate_video(config)
 
     # 7. 移动文件
     move_files(base_dir, output_dir)

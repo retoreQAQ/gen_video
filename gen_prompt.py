@@ -21,10 +21,6 @@ def process_story_and_generate_prompts(config, client):
 
     generate_batch_size = config["model"]["llm"]["generate_batch_size"]
 
-    # 如果输出文件已存在，直接返回
-    if os.path.exists(output_path):
-        logging.info(f"提示词文件 {output_path} 已存在，跳过生成步骤")
-        return
     # 读取故事
     with open(story_path, "r", encoding="utf-8") as f:
         story = f.read()
@@ -35,17 +31,16 @@ def process_story_and_generate_prompts(config, client):
     # 生成提示词
     result = generate_scene_prompts(client, split_story, output_path, generate_batch_size)
 
-    # 解析提示词
-    scene_datas = parse_prompts(result)
-
-    return scene_datas
+    return result
 
 
 def split_raw_story(client, story_text, split_story_path) -> str:
     if os.path.exists(split_story_path):
+        logging.info(f"分割故事文件 {split_story_path} 已存在，跳过生成步骤")
         with open(split_story_path, "r", encoding="utf-8") as f:
             result = f.read()
         return result
+    logging.info("开始分割故事...")
     prompt = get_prompt("split_raw_story")
     response = client.chat.completions.create(
         model="deepseek-chat",
@@ -64,15 +59,13 @@ def split_raw_story(client, story_text, split_story_path) -> str:
     segments = result.split("|")
     segments = [seg.strip() for seg in segments if seg.strip()]
     
-    json_data = {
-        "scenes": [
+    json_data =[
             {
                 "scene_number": i,
-                "text": text
+                "text": text.strip()
             }
             for i, text in enumerate(segments)
         ]
-    }
     
     result = json.dumps(json_data, ensure_ascii=False, indent=2)
     with open(split_story_path, "w", encoding="utf-8") as f:
@@ -80,11 +73,16 @@ def split_raw_story(client, story_text, split_story_path) -> str:
     return result
 
 def generate_scene_prompts(client, split_story, output_path, batch_size) -> str:
+    if os.path.exists(output_path):
+        logging.info(f"提示词文件 {output_path} 已存在，跳过生成步骤")
+        with open(output_path, "r", encoding="utf-8") as f:
+            result = f.read()
+        return result
+    logging.info("开始生成场景提示词...")
     prompt = get_prompt("generate_scene_prompts")
 
     # 将故事分成多个批次处理
-    story_data = json.loads(split_story)
-    scenes = story_data["scenes"]
+    scenes = json.loads(split_story)
     results = []
 
     for i in range(0, len(scenes), batch_size):
@@ -109,30 +107,15 @@ def generate_scene_prompts(client, split_story, output_path, batch_size) -> str:
         batch_result = batch_result.strip()
             
         try:
+
             batch_data = json.loads(batch_result)
-            results.extend(batch_data["scenes"])
+            results.extend(batch_data)
         except json.JSONDecodeError as e:
             raise ValueError(f"第 {i//batch_size + 1} 批次返回的不是有效的JSON格式: {str(e)}")
 
     # 合并所有批次的结果
-    final_result = json.dumps({"scenes": results}, ensure_ascii=False, indent=2)
+    final_result = json.dumps(results, ensure_ascii=False, indent=2)
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(final_result)
     logging.info(f"成功生成 {len(final_result)} 个场景提示词,保存为 scene_prompts.json")
     return final_result
-
-def parse_prompts(data):
-    logging.info("开始解析提示词文件...")
-    try:
-        scenes = data.get("scenes", [])
-        if not scenes:
-            raise ValueError("未找到任何场景数据")
-        scene_datas = [(scene["scene_number"], scene["scene_detail"], scene["prompt"]) for scene in scenes]
-        # 返回场景数据
-        logging.info(f"成功解析 {len(scene_datas)} 个场景")
-        return scene_datas
-    except Exception as e:
-        logging.error(f"解析提示词文件时出错: {str(e)}")
-        raise
-
-    

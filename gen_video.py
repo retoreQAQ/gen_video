@@ -8,16 +8,12 @@ from moviepy.editor import ImageClip
 import json
 import subtitle
 
-def generate_video(config, scene_datas):
+def generate_video(config, use_text_match=False):
     """
-    根据字幕和场景数据生成视频
-    
+    根据字幕和场景数据生成视频（图片和字幕分离，字幕严格按subtitles.json时间戳显示）
     Args:
-        audio_path: 音频文件路径
-        subtitles: 字幕片段
-        scene_data: 场景数据
-        image_dir: 图片目录
-        output_video: 输出视频路径
+        config: 配置文件
+        use_text_match: 是否使用文本相似度匹配（保留但不影响本流程）
     """
     logging.info("开始合成视频...")
     audio_path = os.path.join(config["base"]["base_dir"], config["files"]["audio"]["mp3"])
@@ -30,61 +26,48 @@ def generate_video(config, scene_datas):
         subtitles = json.load(f)
     with open(split_story_path, "r", encoding="utf-8") as f:
         split_story = json.load(f)
+        
+    audio_duration = AudioFileClip(audio_path).duration
+    scene_timestamps = get_scene_timestamps(split_story, subtitles, audio_duration)
+    # 计算场景总时长
+    total_duration = sum(scene["duration"] for scene in scene_timestamps)
+    logging.info(f"总时长: {total_duration:.2f}秒")
+    for idx, ts in enumerate(scene_timestamps):
+        logging.info(f"场景{idx}: start={ts['start']}, end={ts['end']}, duration={ts['duration']}")
 
-    clips = []
     audio_clip = AudioFileClip(audio_path)
-    current_scene = None
-    scene_duration = 0
-    min_scene_duration = 3  # 最小场景持续时间（秒）
 
-    for i, subtitle in enumerate(subtitles):
-        try:
-            start = float(subtitle["start"])
-            end = float(subtitle["end"])
-            duration = end - start
-            text = subtitle["text"]
-            
-            # 根据文本内容找到最匹配的场景
-            matching_scene = find_best_matching_scene(text, scene_datas)
-            
-            # 如果找到匹配的场景且当前场景持续时间足够长，则切换场景
-            if matching_scene is not None and (current_scene is None or scene_duration >= min_scene_duration):
-                current_scene = matching_scene
-                scene_duration = 0
-            
-            # 如果没有找到匹配的场景，使用当前场景或默认场景
-            if current_scene is None:
-                current_scene = 0
-            
-            scene_duration += duration
-            img_path = f"{image_dir}/scene_{current_scene:02d}.png"
-            
-            # 检查图片文件是否存在
-            if not os.path.exists(img_path):
-                logging.error(f"图片文件不存在: {img_path}")
-                continue
-
-            # 创建图片剪辑
-            img_clip = ImageClip(img_path).set_duration(duration).resize(height=720)
-            
-            # 创建字幕剪辑
-            subtitle_clip = create_subtitle_clip(text, duration, img_clip.size)
-            
-            # 合成视频片段
-            clip = CompositeVideoClip([img_clip, subtitle_clip])
-            clips.append(clip)
-            logging.info(f"已处理第 {i+1} 个片段，使用场景 {current_scene}")
-        except Exception as e:
-            logging.error(f"处理第 {i+1} 个片段时出错: {str(e)}")
+    # 1. 生成图片片段序列
+    img_clips = []
+    for i, ts in enumerate(scene_timestamps):
+        img_path = os.path.join(image_dir, f"scene_{i:02d}.png")
+        if not os.path.exists(img_path) or ts["duration"] <= 0:
+            logging.warning(f"图片文件不存在或时长无效: {img_path}")
             continue
+        img_clip = ImageClip(img_path).set_duration(ts["duration"]).resize(height=720)
+        img_clips.append(img_clip)
+    if not img_clips:
+        logging.error("没有可用的图片片段，无法生成视频")
+        raise ValueError("没有可用的图片片段")
+    img_video = concatenate_videoclips(img_clips)
 
-    # 检查是否有可用的片段
-    if not clips:
-        logging.error("没有可用的视频片段，无法生成视频")
-        raise ValueError("没有可用的视频片段")
-
-    logging.info("正在生成最终视频...")
-    final_video = concatenate_videoclips(clips).set_audio(audio_clip)
+    # 2. 生成字幕片段序列
+    subtitle_clips = []
+    for sub in subtitles:
+        text = sub["text"]
+        start = sub["start"]
+        end = sub["end"]
+        duration = round(end - start, 2)
+        subtitle_clip = create_subtitle_clip(text, duration, img_video.size)
+        subtitle_clip = subtitle_clip.set_start(start)
+        subtitle_clips.append(subtitle_clip)
+    if subtitle_clips:
+        all_subtitles = CompositeVideoClip(subtitle_clips, size=img_video.size)
+        # 3. 合成最终视频
+        final_video = CompositeVideoClip([img_video, all_subtitles]).set_audio(audio_clip)
+    else:
+        logging.info("没有字幕片段，只保留图片")
+        final_video = img_video.set_audio(audio_clip)
     final_video.write_videofile(output_video, fps=24)
     logging.info("视频生成完成！")
 
@@ -151,7 +134,65 @@ def find_best_matching_scene(text, scenes):
     
     return best_match if best_score > 0.3 else None  # 设置相似度阈值
 
-
+def get_scene_timestamps(split_story, subtitles, audio_duration=None):
+    """
+    返回每个场景的时间戳（start, end, duration），自动补齐开头、结尾和中间gap
+    """
+    scene_timestamps = []
+    subtitle_idx = 0
+    for scene in split_story:
+        scene_text = scene["text"]
+        scene_start = None
+        scene_end = None
+        # 收集属于该场景的所有字幕
+        while subtitle_idx < len(subtitles):
+            subtitle = subtitles[subtitle_idx]
+            if subtitle["text"] in scene_text:
+                if scene_start is None:
+                    scene_start = subtitle["start"]
+                scene_end = subtitle["end"]
+                subtitle_idx += 1
+            else:
+                # 如果已经开始匹配但遇到不属于该场景的字幕，说明该场景结束
+                if scene_start is not None:
+                    break
+                subtitle_idx += 1
+        if scene_start is not None and scene_end is not None:
+            scene_timestamps.append({
+                "start": scene_start,
+                "end": scene_end,
+                "duration": round(scene_end - scene_start, 2)
+            })
+        else:
+            # 没有匹配到字幕，填None或0
+            scene_timestamps.append({
+                "start": None,
+                "end": None,
+                "duration": 0
+            })
+    # 修正开头
+    if scene_timestamps and scene_timestamps[0]["start"] is not None and scene_timestamps[0]["start"] > 0:
+        scene_timestamps[0]["start"] = 0
+        scene_timestamps[0]["duration"] = round(scene_timestamps[0]["end"] - 0, 2)
+    # 修正中间gap
+    for i in range(1, len(scene_timestamps)):
+        prev = scene_timestamps[i-1]
+        curr = scene_timestamps[i]
+        if prev["end"] is not None and curr["start"] is not None and curr["start"] > prev["end"]:
+            # 比较duration，补短的
+            prev_duration = prev["end"] - prev["start"] if prev["start"] is not None else 0
+            curr_duration = curr["end"] - curr["start"] if curr["start"] is not None else 0
+            if prev_duration < curr_duration:
+                prev["end"] = curr["start"]
+                prev["duration"] = round(prev["end"] - prev["start"], 2)
+            else:
+                curr["start"] = prev["end"]
+                curr["duration"] = round(curr["end"] - curr["start"], 2)
+    # 修正结尾
+    if audio_duration is not None and scene_timestamps and scene_timestamps[-1]["end"] is not None and scene_timestamps[-1]["end"] < audio_duration:
+        scene_timestamps[-1]["end"] = audio_duration
+        scene_timestamps[-1]["duration"] = round(audio_duration - scene_timestamps[-1]["start"], 2)
+    return scene_timestamps
 
 def create_subtitle_clip(text, duration, img_size):
     """完全基于Pillow绘制字幕，避免ImageMagick依赖"""
@@ -193,3 +234,8 @@ def create_subtitle_clip(text, duration, img_size):
     subtitle_clip = subtitle_clip.crossfadein(0.3).crossfadeout(0.3)
 
     return subtitle_clip
+
+if __name__ == "__main__":
+    import yaml
+    config = yaml.load(open("config/config.yaml", "r"), Loader=yaml.FullLoader)
+    generate_video(config, use_text_match=False)
