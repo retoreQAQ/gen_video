@@ -195,37 +195,52 @@ def get_scene_timestamps(split_story, subtitles, audio_duration=None):
     return scene_timestamps
 
 def create_subtitle_clip(text, duration, img_size):
-    """完全基于Pillow绘制字幕，避免ImageMagick依赖"""
+    """使用Pillow绘制自动换行、垂直居中的字幕"""
     width, height = img_size
-    font_size = 40
-
-    # 加载字体（改为你的系统字体）
+    font_size = 30
     font_path = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
     font = ImageFont.truetype(font_path, font_size)
 
-    # 创建画布
+    # 自动换行
+    max_text_width = int(width * 0.9)  # 限制文本最大宽度为画面宽度的90%
+    draw_dummy = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    def wrap_text(text, font, max_width):
+        lines = []
+        line = ""
+        for char in text:
+            if draw_dummy.textlength(line + char, font=font) <= max_width:
+                line += char
+            else:
+                lines.append(line)
+                line = char
+        lines.append(line)
+        return lines
+
+    lines = wrap_text(text, font, max_text_width)
+    line_height = font_size + 10
+    total_text_height = len(lines) * line_height
+
     padding = 20
-    canvas_height = font_size + 2 * padding
+    canvas_height = total_text_height + 2 * padding
     canvas = Image.new("RGBA", (width, canvas_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    # 渲染文字区域大小
-    text_bbox = draw.textbbox((0, 0), text, font=font)
-    text_width = text_bbox[2] - text_bbox[0]
-    text_height = text_bbox[3] - text_bbox[1]
-
-    # 计算位置居中
-    x = (width - text_width) // 2
-    y = (canvas_height - text_height) // 2
-
-    # 背景矩形（半透明）
+    # 背景矩形
+    bg_top = 0
+    bg_bottom = canvas_height
     draw.rectangle(
-        [(x - 10, y - 10), (x + text_width + 10, y + text_height + 10)],
+        [(0, bg_top), (width, bg_bottom)],
         fill=(0, 0, 0, 150)
     )
 
-    # 绘制文字
-    draw.text((x, y), text, font=font, fill="white")
+    # 绘制多行文字
+    y = padding
+    for line in lines:
+        line_width = draw.textlength(line, font=font)
+        x = (width - line_width) // 2
+        draw.text((x, y), line, font=font, fill="white")
+        y += line_height
 
     # 转换为ImageClip
     np_img = np.array(canvas)

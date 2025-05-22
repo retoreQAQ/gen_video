@@ -12,35 +12,55 @@
   - 可以做成质量和速度模式
 - 增加耗时记录（数据埋点）
 - 对齐时是否考虑将字幕里的标点删除？
+  - 暂不
 - 对生成提示词部分应用批处理（done）
   - 根据效果决定要不要提前生成角色设定，避免不同对话中角色风格不一致
 - 使用 img2prompt 进行使用参考图生成提示词
-- 字幕优化：过长字幕目前不会自动排版，而是超出屏幕。
+- 字幕优化：字幕背景需改为动态调整
 - 对齐批处理太慢，考虑先用代码提取文本减少 token
 - 封面的处理
 - 添加背景音乐功能
+- 尝试更多生图模型
+- lora
+- img2prompt
+- 生成完后移动到name文件夹
+- output内文件夹分类
 
 ## 功能特点
 
 - 使用 Whisper 进行语音识别
 - 基于语义匹配的文本对齐
-- 使用 Stable Diffusion 生成场景插图
+- 使用 Stable Diffusion 或api生成场景插图
 - 自动生成字幕和视频合成
 
 ## 项目结构
 
 ```
 .
-├── resources/           # 资源文件目录
-│   ├── images/         # 生成的图片
-│   ├── wav/            # 音频文件
-│   ├── lab/            # 剧本文件
-│   └── scene_prompts.json  # 场景提示词
+├── config/             # 配置文件目录
+│   ├── config.yaml    # 主配置文件
+│   └── key.zshrc     # API密钥配置
+├── manual_img/         # 手动图片处理
+│   ├── manual.py     # 图片下载脚本
+│   └── urls.txt      # 图片URL列表
+├── output/             # 输出目录
+│   └── story_name/    # 按故事名分类
+│       │   ├── audio/     # 音频相关
+│       │   ├── images/    # 生成的图片
+│       │   └── text/      # 文本相关
+│       ├── video/     # 最终视频
+│       └── urls.txt      # 图片URL列表
+│   ├── temp/      # 临时文件
+├── upload/             # 上传文件目录
+│   ├── audio/         # 音频文件
+│   └── text/          # 剧本文件
 ├── utils/              # 工具函数
-│   └── tools.py        # 文本对齐工具
+│   ├── tools.py       # 通用工具
+│   └── prompt.py      # 存放提示词
 ├── gen_prompt.py       # 提示词生成
 ├── gen_video.py        # 视频生成
-└── README.md           # 项目说明
+├── main.py            # 主程序入口
+└── README.md          # 项目说明
 ```
 
 ## 环境要求
@@ -59,6 +79,15 @@ pip install -r requirements.txt
    python main.py story_name
    ```
 3. 生成的视频与中间文件存放在output/story_name下
+
+- 当使用网页版生成图片时，挨个复制图片url到manual_img/urls.txt，然后运行
+  ```bash
+  python manual_img/manual.py
+  ```
+- 再运行
+    ```bash
+  python gen_video.py
+  ```
 
 ## 注意事项
 
