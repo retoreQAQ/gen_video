@@ -23,15 +23,15 @@
 - 尝试更多生图模型
 - lora
 - img2prompt
-- 生成完后移动到name文件夹
-- output内文件夹分类
+- 生成完后移动到 name 文件夹
+- output 内文件夹分类
 - 自动发布抖音
 
 ## 功能特点
 
 - 使用 Whisper 进行语音识别
 - 基于语义匹配的文本对齐
-- 使用 Stable Diffusion 或api生成场景插图
+- 使用 Stable Diffusion 或 api 生成场景插图
 - 自动生成字幕和视频合成
 
 ## 项目结构
@@ -71,21 +71,32 @@
 pip install -r requirements.txt
 ```
 
+完全复原 conda 环境
+
+```bash
+conda env create -f environment.yml
+```
+
+需要提前准备 deepseek 和 openai 等模型 api 的密钥，存放在 config/key.zshrc。
+格式如下：
+OPENAI_API_KEY="sk-..."
+DEEPSEEK_API_KEY="sk-..."
+
 ## 使用方法
 
-1. 准备音频文件和剧本，放在upload文件夹。
+1. 准备音频文件和剧本，放在 upload 文件夹。
 2. 运行：
    ```bash
    python main.py story_name
    ```
-3. 生成的视频与中间文件存放在output/story_name下
+3. 生成的视频与中间文件存放在 output/story_name 下
 
-- 当使用网页版生成图片时，挨个复制图片url到manual_img/urls.txt，然后运行
+- 当使用网页版生成图片时，挨个复制图片 url 到 manual_img/urls.txt，然后运行
   ```bash
   python manual_img/manual.py
   ```
 - 再运行
-    ```bash
+  ```bash
   python gen_video.py
   ```
 

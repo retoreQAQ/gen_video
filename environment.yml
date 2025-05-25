@@ -148,4 +148,3 @@ dependencies:
       - urllib3==1.26.13
       - wcwidth==0.2.13
       - zipp==3.21.0
-prefix: /home/you/anaconda3/envs/genvideo
