@@ -25,6 +25,7 @@
 - img2prompt
 - 生成完后移动到name文件夹
 - output内文件夹分类
+- 自动发布抖音
 
 ## 功能特点
 
@@ -44,13 +45,12 @@
 │   ├── manual.py     # 图片下载脚本
 │   └── urls.txt      # 图片URL列表
 ├── output/             # 输出目录
+│   ├── temp/      # 临时文件
 │   └── story_name/    # 按故事名分类
 │       │   ├── audio/     # 音频相关
 │       │   ├── images/    # 生成的图片
 │       │   └── text/      # 文本相关
-│       ├── video/     # 最终视频
-│       └── urls.txt      # 图片URL列表
-│   ├── temp/      # 临时文件
+│       └── video/     # 最终视频
 ├── upload/             # 上传文件目录
 │   ├── audio/         # 音频文件
 │   └── text/          # 剧本文件
