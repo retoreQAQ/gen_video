@@ -252,5 +252,5 @@ def create_subtitle_clip(text, duration, img_size):
 
 if __name__ == "__main__":
     import yaml
-    config = yaml.load(open("config/config.yaml", "r"), Loader=yaml.FullLoader)
+    config = yaml.load(open("config/config.yaml", "r", encoding="utf-8"), Loader=yaml.FullLoader)
     generate_video(config, use_text_match=False)

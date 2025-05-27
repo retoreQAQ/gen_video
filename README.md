@@ -26,6 +26,10 @@
 - 生成完后移动到 name 文件夹
 - output 内文件夹分类
 - 自动发布抖音
+- 增加检测：story 为空
+- 增加功能：检测生图成本
+- bug: 故事过短时，会有图片时长小于字幕时长，导致报错。
+- torch2.1.2 在 win 上报错，需要升级到 2.6 以上？
 
 ## 功能特点
 
@@ -38,29 +42,29 @@
 
 ```
 .
-├── config/             # 配置文件目录
-│   ├── config.yaml    # 主配置文件
-│   └── key.zshrc     # API密钥配置
-├── manual_img/         # 手动图片处理
-│   ├── manual.py     # 图片下载脚本
-│   └── urls.txt      # 图片URL列表
-├── output/             # 输出目录
-│   ├── temp/      # 临时文件
-│   └── story_name/    # 按故事名分类
-│       │   ├── audio/     # 音频相关
-│       │   ├── images/    # 生成的图片
-│       │   └── text/      # 文本相关
-│       └── video/     # 最终视频
-├── upload/             # 上传文件目录
-│   ├── audio/         # 音频文件
-│   └── text/          # 剧本文件
-├── utils/              # 工具函数
-│   ├── tools.py       # 通用工具
-│   └── prompt.py      # 存放提示词
-├── gen_prompt.py       # 提示词生成
-├── gen_video.py        # 视频生成
-├── main.py            # 主程序入口
-└── README.md          # 项目说明
+├── config/                 # 配置文件目录
+│   ├── config.yaml         # 主配置文件
+│   └── key.zshrc           # API密钥配置
+├── manual_img/             # 手动图片处理
+│   ├── manual.py           # 图片下载脚本
+│   └── urls.txt            # 图片URL列表
+├── output/                 # 输出目录
+│   ├── temp/               # 临时文件
+│   └── story_name/         # 按故事名分类
+│       │   ├── images/     # 生成的图片
+│       ├── output_video.mp4     # 最终视频
+│       └── ...             # 其他中间文件
+├── upload/                 # 上传文件目录
+│   ├── 新录音.m4a           # 音频文件
+│   └── story.txt           # 剧本文件
+├── utils/                  # 工具函数
+│   ├── tools.py            # 通用工具
+│   └── prompt.py           # 存放提示词
+├── gen_image.py            # 图片生成
+├── gen_prompt.py           # 提示词生成
+├── gen_video.py            # 视频生成
+├── main.py                 # 主程序入口
+└── README.md               # 项目说明
 ```
 
 ## 环境要求
@@ -74,21 +78,25 @@ pip install -r requirements.txt
 完全复原 conda 环境
 
 ```bash
-conda env create -f environment.yml
+conda env create -f environment_full.yml -n new_env_name
 ```
 
 需要提前准备 deepseek 和 openai 等模型 api 的密钥，存放在 config/key.zshrc。
 格式如下：
+
+```python
 OPENAI_API_KEY="sk-..."
 DEEPSEEK_API_KEY="sk-..."
+```
 
 ## 使用方法
 
-1. 准备音频文件和剧本，放在 upload 文件夹。
+1. 准备.ma4 音频文件和剧本(文本复制到 upload/story.txt)，放在 upload 文件夹。
 2. 运行：
    ```bash
    python main.py story_name
    ```
+   story_name 改为自定义的故事名
 3. 生成的视频与中间文件存放在 output/story_name 下
 
 - 当使用网页版生成图片时，挨个复制图片 url 到 manual_img/urls.txt，然后运行
@@ -103,5 +111,3 @@ DEEPSEEK_API_KEY="sk-..."
 ## 注意事项
 
 - 确保有足够的 GPU 内存用于 Stable Diffusion
-- 音频文件应为 MP3 格式
-- 剧本文件应为 UTF-8 编码

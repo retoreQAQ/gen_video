@@ -6,6 +6,7 @@ from sentence_transformers import SentenceTransformer, util
 import torch
 import subprocess
 import logging
+import imageio_ffmpeg
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 from difflib import SequenceMatcher
 
@@ -25,9 +26,8 @@ def move_upload_files(temp_dir, target_dir):
     for fname in os.listdir(target_dir):
         if fname == "story.txt":
             story_exists = True
-        elif fname.endswith(".m4a"):
+        elif fname.endswith(".m4a") or fname.endswith(".mp3"):
             m4a_exists = True
-    
     if story_exists and m4a_exists:
         logging.info("story.txt和m4a文件已存在，跳过移动操作")
         return

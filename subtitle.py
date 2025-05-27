@@ -14,7 +14,7 @@ def extract_subtitles(config, client):
         audio_path: 音频文件路径
         script_path: 脚本文件路径
     """
-    audio_path = os.path.join(config["base"]["base_dir"], config["files"]["audio"]["raw"])
+    audio_path = os.path.join(config["base"]["base_dir"], config["files"]["audio"]["mp3"])
     story_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["story"])
     subtitles_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["subtitles"])
     asr_result_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["asr_result"])

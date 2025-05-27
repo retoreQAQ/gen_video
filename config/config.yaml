@@ -40,4 +40,5 @@ model:
   img:
     use_api: false
     api: "gpt-image-1" # 可选值: "gpt-image-1", "dall-e-3", "dall-e-2"
+    quality: "low" # 可选值: "low", "high", "medium"
     offline: "taiyi-sd" # 可选值: "taiyi-sd"
