@@ -12,6 +12,8 @@ base:
 
 # 文件配置
 files:
+  resources:
+    font: "NotoSansCJK-Regular.ttc"
   # 音频文件名
   audio:
     raw: "新录音.m4a"
@@ -24,6 +26,8 @@ files:
     scene_prompts: "scene_prompts.json"
     asr_result: "asr_result.json"
     subtitles: "subtitles.json"
+    subtitles_matched_scenes: "subtitles_matched_scenes.json"
+    split_story_matched_subs: "split_story_matched_subs.json"
   # 图片和视频目录
   media:
     image_dir: "images"
