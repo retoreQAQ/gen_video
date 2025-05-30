@@ -13,11 +13,27 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 def generate_images(config):
     use_api = config["model"]["img"]["use_api"]
     img_dir = os.path.join(config["base"]["base_dir"], config["files"]["media"]["image_dir"])
-    scene_prompts_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["scene_prompts"])
-    logging.info("开始生成场景图片...")
     os.makedirs(img_dir, exist_ok=True)
-    
+    scene_prompts_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["scene_prompts"])
+
+    # 检查图片是否已存在
+    def check_image_exists(scenes, img_dir):
+        for scene in scenes:
+            scene_num = scene["scene_number"]
+            img_path = os.path.join(img_dir, f"scene_{scene_num:02d}.png")
+            if os.path.exists(img_path):
+                logging.info(f"场景 {scene_num} 的图片已存在，跳过生成")
+            else:
+                logging.info(f"场景 {scene_num} 的图片不存在, 重新生成")
+                return False
+        return True
+
     scenes = json.loads(open(scene_prompts_path, "r", encoding="utf-8").read())
+    if check_image_exists(scenes, img_dir):
+        logging.info("场景图片已存在，跳过生成")
+        return
+    
+    logging.info("开始生成场景图片...")
     for i, scene in enumerate(scenes):
         scene_num = scene["scene_number"]
         prompt = scene["prompt"]
@@ -72,17 +88,17 @@ def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
         f.write(image_bytes)
 
 def generate_image_by_offline(prompt, save_path, model):
+
     if model == "taiyi-sd":
         pipe = StableDiffusionPipeline.from_pretrained(
             "IDEA-CCNL/Taiyi-Stable-Diffusion-1B-Chinese-v0.1",
             torch_dtype=torch.float16,
-            safety_checker=None,
-            requires_safety_checker=False
+            use_safetensors = False
         ).to("cuda")
     else:
         raise ValueError(f"不支持的模型: {model}")
     prompt = prompt[:220]
-    image = pipe(prompt).images[0]
+    image = pipe(prompt).images[0] # type: ignore
     image.save(os.path.join(save_path))
 
 if __name__ == "__main__":

@@ -24,6 +24,8 @@ def process_story_and_generate_prompts(config, client):
     # 读取故事
     with open(story_path, "r", encoding="utf-8") as f:
         story = f.read()
+    if len(story) == 0:
+        raise ValueError("故事文本为空")
 
     # 分割故事
     split_story = split_raw_story(client, story, split_story_path)

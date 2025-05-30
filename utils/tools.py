@@ -5,7 +5,25 @@ import re
 import subprocess
 import logging
 import string
+import sys
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def prepare_data(config, story_name):
+    # 路径定义
+    output_dir = config["base"]["output_dir"]
+    base_dir = config["base"]["base_dir"]
+    upload_dir = config["base"]["upload_dir"]
+    raw_audio = os.path.join(base_dir, config["files"]["audio"]["raw"])
+    audio_mp3 = os.path.join(base_dir, config["files"]["audio"]["mp3"])
+    use_tts = config["base"]["use_tts"]
+
+    os.makedirs(base_dir, exist_ok=True)
+
+    output_dir = os.path.join(output_dir, story_name)
+
+    move_upload_files(upload_dir, base_dir, use_tts)
+    if os.path.exists(raw_audio) and not os.path.exists(audio_mp3):
+        convert_audio_to_mp3(raw_audio, audio_mp3)
 
 def convert_audio_to_mp3(input_path, output_path):
     if not input_path.endswith(".mp3"):
@@ -14,8 +32,8 @@ def convert_audio_to_mp3(input_path, output_path):
         subprocess.run(cmd, check=True)
         logging.info(f"音频已转换为 mp3 格式: {output_path}")
 
-def move_upload_files(temp_dir, target_dir):
-    os.makedirs(temp_dir, exist_ok=True)
+def move_upload_files(upload_dir, target_dir, use_tts):
+    os.makedirs(upload_dir, exist_ok=True)
     os.makedirs(target_dir, exist_ok=True)
     # 检查story.txt和m4a文件是否已存在
     story_exists = False
@@ -31,18 +49,21 @@ def move_upload_files(temp_dir, target_dir):
                         exit()
         elif fname.endswith(".m4a") or fname.endswith(".mp3"):
             audio_exists = True
+
     if story_exists and audio_exists:
         logging.info("story.txt和audio文件已存在，跳过移动操作")
         return
-    for fname in os.listdir(temp_dir):
-        src = os.path.join(temp_dir, fname)
+    
+    for fname in os.listdir(upload_dir):
+        src = os.path.join(upload_dir, fname)
         tgt = os.path.join(target_dir, fname)
+        if use_tts and not src.endswith(".txt"):
+            logging.info(f"使用TTS，跳过非txt文件: {src}")
+            continue
         shutil.move(src, tgt)
-        if src.endswith(".txt"):
-            # 如果是文本文件，创建一个空的同名文件
-            with open(src, 'w', encoding='utf-8') as f:
-                pass
-    logging.info(f"已将 {temp_dir} 下所有文件移动到 {target_dir}")
+    with open(os.path.join(upload_dir, 'story.txt'), 'w', encoding='utf-8') as f:
+        pass
+    logging.info(f"已将 {upload_dir} 下所有文件移动到 {target_dir}")
 
 def move_files(source_dir, target_dir):
     os.makedirs(target_dir, exist_ok=True)

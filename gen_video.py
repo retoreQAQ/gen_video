@@ -85,33 +85,36 @@ def add_time_to_split_story(subtitles, split_story, subtitles_matched_scenes_pat
         scene["duration"] = 0.0
         scene["matched_subs"] = []
 
+    sub_matched = False
     for i, sub in enumerate(subtitles):
+        if i == 80:
+            pass
         sub_text = clean_zh_text(sub["text"])
         sub["matched_scenes"] = []
-
         for scene in split_story:
-
             if scene["consumed"]:
                 continue
-
             scene_text = clean_zh_text(scene["text"])
-
-            if len(sub_text) < len(scene_text):
+            if len(sub_text) <= len(scene_text):
                 # 字幕较短，判断字幕是否被场景包含
                 if sub_text in scene_text:
                     sub["matched_scenes"].append(scene["scene_number"])
                     scene["matched_subs"].append(i)
+                    sub_matched = True
                     break
                 else:
                     scene["consumed"] = True
                     continue
             else:
+                if sub_matched:
+                    scene["consumed"] = True
+                    sub_matched = False
+                    continue
                 # 字幕较长，判断场景是否被字幕包含
                 if scene_text in sub_text:
                     sub["matched_scenes"].append(scene["scene_number"])
                     scene["matched_subs"].append(i)
                     scene["consumed"] = True
-                    # 均分的话，需要遍历完这个字幕才能知道包含多少图片，才能知道均分后每张图片的开始结束和时长，怎么处理
                 else:
                     break
 

@@ -1,16 +1,16 @@
 # 基础配置
 base:
-  root_dir: "./"
-  resources_dir: "./resources"
+  resources_dir: "resources"
   # 资源文件存放目录
-  output_dir: "./output"
-  base_dir: "./output/temp"
+  output_dir: "output"
+  base_dir: "output/temp"
   # 上传文件目录
-  upload_dir: "./upload"
+  upload_dir: "upload"
   # 故事名称
   story_name: "default"
   # 手动分段
   manual_clip_story: false
+  use_tts: false
 
 # 文件配置
 files:
@@ -18,7 +18,7 @@ files:
     font: "NotoSansCJK-Regular.ttc"
   # 音频文件名
   audio:
-    raw: "audio.m4a"
+    raw: "fake.wav"
     mp3: "audio.mp3"
   # 文本文件名
   text:
@@ -34,10 +34,17 @@ files:
   media:
     image_dir: "images"
     output_video: "output_video.mp4"
+  reference:
+    speaker_path: "resources/reference/speaker"
 
 model:
   tts:
-    model: "fish-speech-server" # 可选值: "fish-speech-server"
+    path: "resources/models/tts"
+    model_dir_name: "fish-speech" # 可选值: "fish-speech-1.5"
+    use_reference_speaker: true
+    use_compile: true
+    num_samples: 4
+    codes: "1" # 可选值: 从0到num_samples-1
   asr:
     model: "whisper" # 可选值: "whisper"
     whisper: "large" # 可选值: "tiny", "base", "small", "medium", "large", "turbo"

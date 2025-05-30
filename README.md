@@ -22,8 +22,17 @@
 - 增加功能：检测生图成本
 - 增加log
 - torch2.1.2 在 win 上报错，需要升级到 2.6 以上？
+- webUI or GUI
+
+- 增加分割故事前的检错
+- 应对llm的出错：替换时某一两个字没换，导致后续硬对齐出错。（考虑是上下文太长的原因，尝试分批处理）
+- 硬对齐时的检错
+- 对比新旧环境，为何旧环境能生图，新的报错
+- 硬对齐算法需要更多测试
+- 语音合成调用优化
 
 ##Done
+- 增加语音合成模块
 - 升级moviepy到最新版本，升级代码
 - 增加检测：story 为空
 - whisper 的 large 表现比 base 好太多了，基本达到了直接用到程度。可以考虑添加是否进行文本对齐的选项(由于后续图片获取时间戳的流程，必须对齐)
@@ -87,8 +96,7 @@ conda env create -f environment_full.yml -n new_env_name
 conda create -n gen_video python=3.10
 conda activate gen_video
 apt install ffmpeg
-# moviepy需要使用特定版本
-pip install openai transformers==4.52.3 moviepy huggingface-hub==0.30.0 diffusers==0.33.1 python-dotenv==1.1.0 whisper
+pip install openai transformers==4.52.3 moviepy huggingface-hub==0.30.0 diffusers==0.33.1 python-dotenv==1.1.0 openai-whisper ipykernel accelerate
 # cuda与torch版本参考 https://pytorch.org/get-started/previous-versions/
 pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
 
@@ -134,5 +142,10 @@ DEEPSEEK_API_KEY="sk-..."
   ```
 
 ## 注意事项
-
+在resources/models/tts/fish-speech/fish_speech/models/text2semantic/inference.py的最上面加：
+```python
+import pyrootutils
+pyrootutils.setup_root(__file__, indicator=".project-root", pythonpath=True)
+```
+不然运行gen_audio.py报错
 

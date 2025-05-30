@@ -4,10 +4,11 @@ from gen_prompt import process_story_and_generate_prompts
 from gen_image import generate_images
 from gen_video import generate_video
 from subtitle import extract_subtitles
+from gen_audio import generate_audio
 import yaml
 from openai import OpenAI
 from dotenv import load_dotenv
-from utils.tools import convert_audio_to_mp3, move_upload_files, move_files
+from utils.tools import prepare_data, move_files
 import logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -17,9 +18,8 @@ def main():
     # 路径定义
     output_dir = config["base"]["output_dir"]
     base_dir = config["base"]["base_dir"]
-    upload_dir = config["base"]["upload_dir"]
-    raw_audio = os.path.join(base_dir, config["files"]["audio"]["raw"])
-    audio_mp3 = os.path.join(base_dir, config["files"]["audio"]["mp3"])
+    use_tts = config["base"]["use_tts"]
+    synthesized_audio_mp3 = os.path.join(base_dir, f"synthesized_{config['files']['audio']['mp3']}")
 
     os.makedirs(base_dir, exist_ok=True)
 
@@ -30,15 +30,15 @@ def main():
 
     output_dir = os.path.join(output_dir, story_name)
 
-    move_upload_files(upload_dir, base_dir)
-
     load_dotenv(dotenv_path="config/key.zshrc", override=True)
     llm_client = OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com")
     
     
-    # 1. 音频格式转换（如有 .m4a）
-    if os.path.exists(raw_audio) and not os.path.exists(audio_mp3):
-        convert_audio_to_mp3(raw_audio, audio_mp3)
+    # 1. 数据准备
+    prepare_data(config, story_name)
+
+    if use_tts:
+        generate_audio(config, synthesized_audio_mp3)
 
     # 2. 提取字幕
     extract_subtitles(config, llm_client)
