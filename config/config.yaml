@@ -1,5 +1,7 @@
 # 基础配置
 base:
+  root_dir: "./"
+  resources_dir: "./resources"
   # 资源文件存放目录
   output_dir: "./output"
   base_dir: "./output/temp"
@@ -16,7 +18,7 @@ files:
     font: "NotoSansCJK-Regular.ttc"
   # 音频文件名
   audio:
-    raw: "新录音.m4a"
+    raw: "audio.m4a"
     mp3: "audio.mp3"
   # 文本文件名
   text:
@@ -34,6 +36,8 @@ files:
     output_video: "output_video.mp4"
 
 model:
+  tts:
+    model: "fish-speech-server" # 可选值: "fish-speech-server"
   asr:
     model: "whisper" # 可选值: "whisper"
     whisper: "large" # 可选值: "tiny", "base", "small", "medium", "large", "turbo"
@@ -46,3 +50,6 @@ model:
     api: "gpt-image-1" # 可选值: "gpt-image-1", "dall-e-3", "dall-e-2"
     quality: "low" # 可选值: "low", "high", "medium"
     offline: "taiyi-sd" # 可选值: "taiyi-sd"
+
+function:
+  bg_mode: "dynamic" # 可选值: "dynamic", "no_bg"

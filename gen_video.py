@@ -1,5 +1,6 @@
 import os
-from moviepy.editor import AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips
+from moviepy import AudioFileClip, ImageClip, CompositeVideoClip, concatenate_videoclips
+from moviepy import vfx, afx
 import logging
 from PIL import Image, ImageDraw, ImageFont # type: ignore
 import numpy as np
@@ -21,15 +22,15 @@ def generate_video(config):
     output_video = os.path.join(config["base"]["base_dir"], config["files"]["media"]["output_video"])
     subtitles_matched_scenes_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["subtitles_matched_scenes"])
     split_story_matched_subs_path = os.path.join(config["base"]["base_dir"], config["files"]["text"]["split_story_matched_subs"])
-    font_path = os.path.join(config["base"]["base_dir"], "resources", "font", config["files"]["resources"]["font"])
-
+    font_path = os.path.join(config["base"]["resources_dir"], "font", config["files"]["resources"]["font"])
+    bg_mode = config["function"]["bg_mode"]
     with open(subtitles_path, "r", encoding="utf-8") as f:
         subtitles = json.load(f)
     with open(split_story_path, "r", encoding="utf-8") as f:
         split_story = json.load(f)
         
-    # audio_duration = AudioFileClip(audio_path).duration
-    subtitles, split_story = add_time_to_split_story(subtitles, split_story, subtitles_matched_scenes_path, split_story_matched_subs_path, 30)
+    audio_duration = AudioFileClip(audio_path).duration
+    subtitles, split_story = add_time_to_split_story(subtitles, split_story, subtitles_matched_scenes_path, split_story_matched_subs_path, audio_duration)
     scene_timestamps = get_scene_timestamps(split_story)
 
     audio_clip = AudioFileClip(audio_path)
@@ -41,7 +42,7 @@ def generate_video(config):
         if not os.path.exists(img_path) or ts["duration"] <= 0:
             logging.warning(f"图片文件不存在或时长无效: {img_path}")
             continue
-        img_clip = ImageClip(img_path).set_duration(ts["duration"]).resize(height=720)
+        img_clip = ImageClip(img_path, duration=ts["duration"]).resized(height=720)
         img_clips.append(img_clip)
     if not img_clips:
         logging.error("没有可用的图片片段，无法生成视频")
@@ -55,17 +56,21 @@ def generate_video(config):
         start = sub["start"]
         end = sub["end"]
         duration = round(end - start, 2)
-        subtitle_clip = create_subtitle_clip(text, duration, img_video.size, font_path)
-        subtitle_clip = subtitle_clip.set_start(start)
+        subtitle_clip = create_subtitle_clip(text, duration, img_video.size, font_path, bg_mode=bg_mode)
+        subtitle_clip = subtitle_clip.with_start(start)
+        print(f"subtitle_clip: {subtitle_clip.duration}, {subtitle_clip.size}")
         subtitle_clips.append(subtitle_clip)
     if subtitle_clips:
         all_subtitles = CompositeVideoClip(subtitle_clips, size=img_video.size)
         # 3. 合成最终视频
-        final_video = CompositeVideoClip([img_video, all_subtitles]).set_audio(audio_clip)
+        final_video = CompositeVideoClip([img_video, all_subtitles], size=img_video.size)
+        final_video = final_video.with_audio(audio_clip)
     else:
         logging.info("没有字幕片段，只保留图片")
-        final_video = img_video.set_audio(audio_clip)
-    final_video.write_videofile(output_video, fps=24)
+        final_video = img_video.with_audio(audio_clip)
+    
+    final_video.write_videofile(output_video, fps=24, write_logfile=True)
+    final_video.close()
     logging.info("视频生成完成！")
 
 def add_time_to_split_story(subtitles, split_story, subtitles_matched_scenes_path, split_story_matched_subs_path, audio_duration=None):
@@ -197,7 +202,7 @@ def get_scene_timestamps(split_story):
         logging.info(f"场景{idx}: start={ts['start']}, end={ts['end']}, duration={ts['duration']}")
     return scene_timestamps
 
-def create_subtitle_clip(text, duration, img_size, font_path):
+def create_subtitle_clip(text, duration, img_size, font_path, bg_mode="dynamic"):
     """使用Pillow绘制自动换行、垂直居中的字幕"""
     width, height = img_size
     font_size = 30
@@ -222,34 +227,36 @@ def create_subtitle_clip(text, duration, img_size, font_path):
     lines = wrap_text(text, font, max_text_width)
     line_height = font_size + 10
     total_text_height = len(lines) * line_height
+    max_line_width = max(draw_dummy.textlength(line, font=font) for line in lines)
 
     padding = 20
-    canvas_height = total_text_height + 2 * padding
-    canvas = Image.new("RGBA", (width, canvas_height), (0, 0, 0, 0))
+    bg_width = int(max_line_width + 2 * padding)
+    bg_height = int(total_text_height + 2 * padding)
+
+    # 创建透明画布
+    canvas = Image.new("RGBA", (bg_width, bg_height), (0, 0, 0, 0))
     draw = ImageDraw.Draw(canvas)
 
-    # 背景矩形
-    bg_top = 0
-    bg_bottom = canvas_height
-    draw.rectangle(
-        [(0, bg_top), (width, bg_bottom)],
-        fill=(0, 0, 0, 150)
-    )
+    if bg_mode == "dynamic":
+        draw.rectangle(
+            [(0, 0), (bg_width, bg_height)],
+            fill=(0, 0, 0, 150)
+        )
 
-    # 绘制多行文字
+    # 绘制文字（垂直居中）
     y = padding
     for line in lines:
         line_width = draw.textlength(line, font=font)
-        x = (width - line_width) // 2
+        x = (bg_width - line_width) // 2
         draw.text((x, y), line, font=font, fill="white")
         y += line_height
 
-    # 转换为ImageClip
+    # 转换为 ImageClip
     np_img = np.array(canvas)
-    subtitle_clip = ImageClip(np_img).set_duration(duration)
-    subtitle_clip = subtitle_clip.set_position(("center", "bottom"))
-    subtitle_clip = subtitle_clip.crossfadein(0.3).crossfadeout(0.3)
-
+    subtitle_clip = ImageClip(np_img, duration=duration)
+    subtitle_clip = subtitle_clip.with_duration(duration)
+    subtitle_clip = subtitle_clip.with_position(((img_size[0] - bg_width) // 2, img_size[1] - bg_height - 20))
+    subtitle_clip = subtitle_clip.with_effects([vfx.CrossFadeIn(0.3), vfx.CrossFadeOut(0.3)])
     return subtitle_clip
 
 if __name__ == "__main__":

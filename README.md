@@ -4,16 +4,11 @@
 
 ## 开发进度
 
-- v0.1 版本完成，可实现全流程自动化生成视频。
+- v0.2 版本完成，可实现全流程自动化生成视频。
 
 ## 待更新
-
-- whisper 的 large 表现比 base 好太多了，基本达到了直接用到程度。可以考虑添加是否进行文本对齐的选项
-  - 可以做成质量和速度模式
 - 增加耗时记录（数据埋点）
-- 对齐时是否考虑将字幕里的标点删除？(done)
-- 对生成提示词部分应用批处理(done)
-  - 根据效果决定要不要提前生成角色设定，避免不同对话中角色风格不一致
+- 根据效果决定要不要提前生成角色设定，避免不同对话中角色风格不一致
 - 使用 img2prompt 进行使用参考图生成提示词
 - 字幕优化：字幕背景需改为动态调整
 - 对齐批处理太慢，考虑先用代码提取文本减少 token
@@ -22,13 +17,20 @@
 - 尝试更多生图模型
 - lora
 - img2prompt
-- 生成完后移动到 name 文件夹(done)
 - output 内文件夹分类
 - 自动发布抖音
-- 增加检测：story 为空
 - 增加功能：检测生图成本
-- bug: 故事过短时，会有图片时长小于字幕时长，导致报错。(fixed)
+- 增加log
 - torch2.1.2 在 win 上报错，需要升级到 2.6 以上？
+
+##Done
+- 升级moviepy到最新版本，升级代码
+- 增加检测：story 为空
+- whisper 的 large 表现比 base 好太多了，基本达到了直接用到程度。可以考虑添加是否进行文本对齐的选项(由于后续图片获取时间戳的流程，必须对齐)
+- 对齐时是否考虑将字幕里的标点删除？
+- 对生成提示词部分应用批处理
+- 生成完后移动到 name 文件夹
+- bug: 故事过短时，会有图片时长小于字幕时长，导致报错。
 
 ## 功能特点
 
@@ -80,6 +82,30 @@ pip install -r requirements.txt
 conda env create -f environment_full.yml -n new_env_name
 ```
 
+无法使用时手动构建环境, cuda版本为11.8或12.
+```bash
+conda create -n gen_video python=3.10
+conda activate gen_video
+apt install ffmpeg
+# moviepy需要使用特定版本
+pip install openai transformers==4.52.3 moviepy huggingface-hub==0.30.0 diffusers==0.33.1 python-dotenv==1.1.0 whisper
+# cuda与torch版本参考 https://pytorch.org/get-started/previous-versions/
+pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+
+# for FishSpeech TTS, it's not necessary if you don't need it
+cd resources # 或者任意你想存储在的位置，参考config.yaml
+git clone https://github.com/fishaudio/fish-speech.git
+# (Ubuntu / Debian 用户) 安装 sox + ffmpeg
+sudo apt install libsox-dev ffmpeg
+# (Ubuntu / Debian 用户) 安装 pyaudio
+sudo apt install build-essential \
+    cmake \
+    libasound-dev \
+    portaudio19-dev \
+    libportaudio2 \
+    libportaudiocpp0
+```
+
 需要提前准备 deepseek 和 openai 等模型 api 的密钥，存放在 config/key.zshrc。
 格式如下：
 
@@ -109,4 +135,4 @@ DEEPSEEK_API_KEY="sk-..."
 
 ## 注意事项
 
-- 确保有足够的 GPU 内存用于 Stable Diffusion
+

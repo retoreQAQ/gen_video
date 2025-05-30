@@ -31,11 +31,6 @@ ENV/
 *.swp
 *.swo
 
-# Project specific
-resources/images/*
-!resources/images/.gitkeep
-output_video.mp4
-
 # Logs
 *.log
 
@@ -47,6 +42,7 @@ output_video.mp4
 .DS_Store
 Thumbs.db 
 
+# custom
 config/key.zshrc
 .cursor
 output/*
@@ -54,3 +50,4 @@ temp/*
 chatapi.ipynb
 upload/*
 manual_img/urls.txt
+resources/models/*

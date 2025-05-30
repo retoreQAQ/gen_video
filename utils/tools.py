@@ -19,14 +19,20 @@ def move_upload_files(temp_dir, target_dir):
     os.makedirs(target_dir, exist_ok=True)
     # 检查story.txt和m4a文件是否已存在
     story_exists = False
-    m4a_exists = False
+    audio_exists = False
     for fname in os.listdir(target_dir):
         if fname == "story.txt":
             story_exists = True
+            with open(os.path.join(target_dir, fname), 'r', encoding='utf-8') as f:
+                content = f.read().strip()
+                if not content:
+                    logging.warning("story.txt 文件内容为空, 是否继续？ y/n")
+                    if input() != "y":
+                        exit()
         elif fname.endswith(".m4a") or fname.endswith(".mp3"):
-            m4a_exists = True
-    if story_exists and m4a_exists:
-        logging.info("story.txt和m4a文件已存在，跳过移动操作")
+            audio_exists = True
+    if story_exists and audio_exists:
+        logging.info("story.txt和audio文件已存在，跳过移动操作")
         return
     for fname in os.listdir(temp_dir):
         src = os.path.join(temp_dir, fname)
