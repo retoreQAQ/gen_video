@@ -1,3 +1,4 @@
+import imp
 import json
 import os
 import logging
@@ -34,23 +35,33 @@ def generate_images(config):
         return
     
     logging.info("开始生成场景图片...")
-    for i, scene in enumerate(scenes):
-        scene_num = scene["scene_number"]
-        prompt = scene["prompt"]
-        logging.info(f"正在生成场景 {scene_num} 的图片...")
-        try:
+
+    if not use_api:
+        img_model = config["model"]["img"]["offline"]
+        pipe = load_model(img_model)
+        for scene in scenes:
+            scene_num = scene["scene_number"]
+            prompt = scene["prompt"]
             save_path = os.path.join(img_dir, f"scene_{scene_num:02d}.png")
-            if use_api:
-                img_model = config["model"]["img"]["api"]
-                img_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            try:
+                generate_image_by_offline(img_model, pipe, prompt, save_path)
+                logging.info(f"场景 {scene_num} 图片生成成功")
+            except Exception as e:
+                logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
+                break
+    else:
+        img_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        img_model = config["model"]["img"]["api"]
+        for scene in scenes:
+            scene_num = scene["scene_number"]
+            prompt = scene["prompt"]
+            save_path = os.path.join(img_dir, f"scene_{scene_num:02d}.png")
+            try:
                 generate_image_by_api(prompt, save_path, img_client, img_model)
-            else:
-                img_model = config["model"]["img"]["offline"]
-                generate_image_by_offline(prompt, save_path, img_model)
-            logging.info(f"场景 {scene_num} 图片生成成功")
-        except Exception as e:
-            logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
-            continue
+                logging.info(f"场景 {scene_num} 图片生成成功")
+            except Exception as e:
+                logging.error(f"生成场景 {scene_num} 图片时出错: {str(e)}")
+                break
 
 def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
     """
@@ -87,7 +98,32 @@ def generate_image_by_api(prompt, save_path, img_client, model="gpt-image-1"):
     with open(save_path, "wb") as f:
         f.write(image_bytes)
 
-def generate_image_by_offline(prompt, save_path, model):
+def load_model(model):
+    if model == "sd3.5":
+        model_path_offline = "resources/models/img/stable-diffusion-3.5-medium"
+        model_path_online = "stabilityai/stable-diffusion-3.5-medium"
+        from diffusers.pipelines.stable_diffusion_3.pipeline_stable_diffusion_3 import StableDiffusion3Pipeline
+        import gc
+
+        pipe = StableDiffusion3Pipeline.from_pretrained(
+            model_path_offline, 
+            torch_dtype=torch.float16
+        ).to("cuda")
+
+        pipe.enable_model_cpu_offload()  # 不活跃模块转 CPU
+        pipe.enable_attention_slicing() 
+        # pipe.enable_sequential_cpu_offload()  # 更进一步：模块顺序加载（比前者更激进）
+
+    elif model == "taiyi-sd":
+        model_path = "resources/models/img/taiyi-sd"
+    
+    return pipe
+
+def generate_image_by_offline(model, pipe, prompt, save_path):
+    '''
+    访问受限模型需要登陆
+    huggingface-cli login
+    '''
 
     if model == "taiyi-sd":
         pipe = StableDiffusionPipeline.from_pretrained(
@@ -95,11 +131,26 @@ def generate_image_by_offline(prompt, save_path, model):
             torch_dtype=torch.float16,
             use_safetensors = False
         ).to("cuda")
+
+        prompt = prompt[:220]
+        image = pipe(prompt).images[0] # type: ignore
+        image.save(os.path.join(save_path))
+
+    elif model == "sd3.5":
+
+        import gc
+
+        image = pipe(prompt, height=768, width=512, num_inference_steps=40, guidance_scale=4.5).images[0] # type: ignore
+        image.save(os.path.join(save_path))
+
+        del image
+        torch.cuda.empty_cache()
+        gc.collect()
+
     else:
         raise ValueError(f"不支持的模型: {model}")
-    prompt = prompt[:220]
-    image = pipe(prompt).images[0] # type: ignore
-    image.save(os.path.join(save_path))
 
 if __name__ == "__main__":
-    generate_image_by_offline("一个美丽的女孩在海边散步", "test.png", "taiyi-sd")
+    import yaml
+    config = yaml.load(open("config/config.yaml", "r", encoding="utf-8"), Loader=yaml.FullLoader)
+    generate_images(config)

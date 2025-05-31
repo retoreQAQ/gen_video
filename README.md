@@ -21,17 +21,20 @@
 - 自动发布抖音
 - 增加功能：检测生图成本
 - 增加log
-- torch2.1.2 在 win 上报错，需要升级到 2.6 以上？
 - webUI or GUI
 
 - 增加分割故事前的检错
 - 应对llm的出错：替换时某一两个字没换，导致后续硬对齐出错。（考虑是上下文太长的原因，尝试分批处理）
 - 硬对齐时的检错
-- 对比新旧环境，为何旧环境能生图，新的报错
 - 硬对齐算法需要更多测试
 - 语音合成调用优化
 
+## TODO
+- 优化测试sd3.5提示词生成
+
 ##Done
+- 使用sd3.5medium
+- 对比新旧环境，为何旧环境能生图，新的报错
 - 增加语音合成模块
 - 升级moviepy到最新版本，升级代码
 - 增加检测：story 为空
@@ -91,16 +94,23 @@ pip install -r requirements.txt
 conda env create -f environment_full.yml -n new_env_name
 ```
 
-无法使用时手动构建环境, cuda版本为11.8或12.
+无法使用时手动构建环境, cuda版本为11.8或12.4/6/8（满足pytorch>=2.6）
 ```bash
 conda create -n gen_video python=3.10
 conda activate gen_video
 apt install ffmpeg
-pip install openai transformers==4.52.3 moviepy huggingface-hub==0.30.0 diffusers==0.33.1 python-dotenv==1.1.0 openai-whisper ipykernel accelerate
+# accelerate
+pip install openai transformers==4.52.3 moviepy huggingface-hub==0.30.0 diffusers==0.33.1 python-dotenv==1.1.0 openai-whisper ipykernel
 # cuda与torch版本参考 https://pytorch.org/get-started/previous-versions/
-pip install torch==2.4.1 torchvision==0.19.1 torchaudio==2.4.1 --index-url https://download.pytorch.org/whl/cu121
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
+```
+torch小于2.6时，为解决生图报错，安装以下旧版本：
+```bash
+pip install transformers==4.36.2 diffusers==0.27.2 huggingface-hub==0.21.4
+```
 
-# for FishSpeech TTS, it's not necessary if you don't need it
+for FishSpeech TTS, it's not necessary if you don't need it
+```bash
 cd resources # 或者任意你想存储在的位置，参考config.yaml
 git clone https://github.com/fishaudio/fish-speech.git
 # (Ubuntu / Debian 用户) 安装 sox + ffmpeg
@@ -112,6 +122,12 @@ sudo apt install build-essential \
     portaudio19-dev \
     libportaudio2 \
     libportaudiocpp0
+```
+
+如果使用本地模型，以sd3.5 large为例：
+```bash
+huggingface-cli login
+huggingface-cli download stabilityai/stable-diffusion-3.5-large --local-dir ./resources/models/img/sd3.5 --local-dir-use-symlinks False
 ```
 
 需要提前准备 deepseek 和 openai 等模型 api 的密钥，存放在 config/key.zshrc。
